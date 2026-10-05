@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>licarsware — admin</title>
+<style>
+  :root {
+    --main:#1a191a; --raised:#161516; --hover:#1e1d1e; --hover2:#282728;
+    --text:#c8c8c8; --muted:#9a9a9a; --dim:#8c8c8c;
+    --accent:#38dbe4; --error:#fa3238; --success:#05be66; --stroke:rgba(85,85,85,.5);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family: Arial, 'Segoe UI', sans-serif; font-size:14px;
+    background:#141314; background-image: radial-gradient(circle at 35% 20%, #201f20 0%, #141314 65%);
+    min-height:100vh; color:var(--text); padding:32px 16px;
+  }
+  .panel {
+    max-width:640px; margin:0 auto; background:var(--main); border:1px solid var(--stroke);
+    border-radius:8px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,.6);
+  }
+  h1 { font-size:20px; font-weight:900; letter-spacing:-.3px; }
+  h1 span { color:var(--accent); font-size:13px; margin-left:6px; }
+  .sub { color:var(--dim); font-size:12px; margin-top:4px; }
+  .section { margin-top:20px; border-top:1px solid var(--stroke); padding-top:16px; }
+  .section h2 { font-size:11px; letter-spacing:1px; color:var(--dim); margin-bottom:10px; }
+  label { display:block; color:var(--muted); font-size:12px; margin:10px 0 4px; }
+  input, select {
+    width:100%; background:var(--raised); border:1px solid var(--stroke); color:var(--text);
+    padding:9px 11px; border-radius:5px; font-size:13px; outline:none;
+  }
+  input:focus, select:focus { border-color:var(--accent); }
+  .row2 { display:flex; gap:10px; }
+  .row2 > * { flex:1; }
+  button {
+    background:var(--accent); color:#103030; border:0; border-radius:5px; padding:9px 16px;
+    font-weight:bold; font-size:13px; cursor:pointer; margin-top:12px;
+  }
+  button:hover { filter:brightness(1.12); }
+  button.ghost { background:var(--hover2); color:var(--text); }
+  .out {
+    margin-top:10px; background:var(--raised); border:1px solid var(--stroke); border-radius:5px;
+    padding:10px 12px; font-family:Consolas,monospace; font-size:12.5px; white-space:pre-wrap;
+    color:var(--muted); min-height:20px; max-height:260px; overflow-y:auto; line-height:1.55;
+  }
+  .keyline { color:var(--accent); font-weight:bold; cursor:pointer; }
+  .ok { color:var(--success); } .bad { color:var(--error); }
+  .hint { color:var(--dim); font-size:11px; margin-top:6px; line-height:1.5; }
+  .creds { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="panel">
+  <h1>licarsware<span>admin</span></h1>
+  <div class="sub">Runs entirely in your browser — your token is sent only to YOUR server and (optionally) kept in localStorage.</div>
+
+  <div class="section">
+    <h2>CONNECTION</h2>
+    <label>Server URL</label>
+    <input id="url" placeholder="https://licarsware-xxxx.onrender.com">
+    <label>Admin token (LW_ADMIN)</label>
+    <input id="token" type="password" placeholder="your LW_ADMIN value">
+    <div class="creds"><input type="checkbox" id="remember" checked style="width:auto;"> <span>remember on this device</span></div>
+    <button id="pingBtn" class="ghost">Test connection</button>
+  </div>
+
+  <div class="section">
+    <h2>GENERATE KEY</h2>
+    <div class="row2">
+      <div>
+        <label>Script name</label>
+        <input id="script" value="licarsware">
+      </div>
+      <div>
+        <label>Duration</label>
+        <select id="duration">
+          <option value="lifetime">lifetime</option>
+          <option value="1d">1 day</option>
+          <option value="7d">1 week</option>
+        </select>
+      </div>
+    </div>
+    <button id="genBtn">Generate key</button>
+    <div class="hint">Click a generated key to copy it.</div>
+  </div>
+
+  <div class="section">
+    <h2>MANAGE</h2>
+    <div class="row2">
+      <div>
+        <label>Key (to reset IP binding)</label>
+        <input id="resetKey" placeholder="XXXX-XXXX-XXXX-XXXX">
+        <button id="resetBtn" class="ghost">Reset binding</button>
+      </div>
+      <div>
+        <label>HWID (to unban)</label>
+        <input id="unbanHwid" placeholder="hwid hash">
+        <button id="unbanBtn" class="ghost">Unban HWID</button>
+      </div>
+    </div>
+    <button id="listBtn" class="ghost">List all keys + blacklist</button>
+  </div>
+
+  <div class="section">
+    <h2>OUTPUT</h2>
+    <div class="out" id="out">ready.</div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const out = $('out');
+
+  // restore saved connection
+  try {
+    const saved = JSON.parse(localStorage.getItem('lw_admin') || 'null');
+    if (saved) { $('url').value = saved.url || ''; $('token').value = saved.token || ''; }
+  } catch (e) {}
+
+  function saveCreds() {
+    if (!$('remember').checked) return;
+    localStorage.setItem('lw_admin', JSON.stringify({ url: $('url').value.trim(), token: $('token').value }));
+  }
+
+  function api() {
+    let url = $('url').value.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+    return { base: url, token: $('token').value.trim() };
+  }
+
+  function log(text, cls) {
+    const span = document.createElement('div');
+    if (cls) span.className = cls;
+    span.textContent = text;
+    out.appendChild(span);
+    out.scrollTop = out.scrollHeight;
+  }
+
+  async function call(path, opts) {
+    const { base, token } = api();
+    if (!base || !token) { log('missing URL or token', 'bad'); throw new Error('missing creds'); }
+    const res = await fetch(base + path, {
+      ...opts,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || res.status + ' ' + res.statusText);
+    return data;
+  }
+
+  $('pingBtn').onclick = async () => {
+    log('pinging…');
+    try {
+      const { base } = api();
+      const res = await fetch(base + '/ping');
+      const data = await res.json();
+      log('✔ ' + base + ' — ' + data.service, 'ok');
+      saveCreds();
+    } catch (e) { log('✘ ' + e.message, 'bad'); }
+  };
+
+  $('genBtn').onclick = async () => {
+    log('generating ' + $('duration').value + ' key…');
+    try {
+      const data = await call('/admin/gen', {
+        method: 'POST',
+        body: JSON.stringify({ script: $('script').value.trim() || 'licarsware', duration: $('duration').value }),
+      });
+      const span = document.createElement('div');
+      span.className = 'keyline';
+      span.textContent = data.key + '   (' + data.duration + ')';
+      span.title = 'click to copy';
+      span.onclick = () => { navigator.clipboard.writeText(data.key); log('copied ' + data.key, 'ok'); };
+      out.appendChild(span);
+      out.scrollTop = out.scrollHeight;
+      saveCreds();
+    } catch (e) { log('✘ ' + e.message, 'bad'); }
+  };
+
+  $('resetBtn').onclick = async () => {
+    try {
+      const data = await call('/admin/reset', { method: 'POST', body: JSON.stringify({ key: $('resetKey').value.trim() }) });
+      log('✔ ' + (data.message || 'reset'), 'ok');
+    } catch (e) { log('✘ ' + e.message, 'bad'); }
+  };
+
+  $('unbanBtn').onclick = async () => {
+    try {
+      await call('/admin/unban', { method: 'POST', body: JSON.stringify({ hwid: $('unbanHwid').value.trim() }) });
+      log('✔ unbanned', 'ok');
+    } catch (e) { log('✘ ' + e.message, 'bad'); }
+  };
+
+  $('listBtn').onclick = async () => {
+    log('fetching…');
+    try {
+      const data = await call('/admin/list');
+      const keys = Object.entries(data.keys || {});
+      log(keys.length + ' key(s), ' + Object.keys(data.blacklist || {}).length + ' blacklisted hwid(s)');
+      for (const [key, info] of keys) {
+        const bound = info.ip ? ('bound to ' + info.ip + (info.expires_at ? ' • expires ' + new Date(info.expires_at * 1000).toLocaleString() : ' • lifetime')) : 'unbound';
+        log('  ' + key + ' — ' + (info.duration || 'lifetime') + ' • ' + bound);
+      }
+      for (const [hwid, info] of Object.entries(data.blacklist || {})) {
+        log('  BANNED ' + hwid.slice(0, 12) + '… — ' + (info.reason || ''), 'bad');
+      }
+      saveCreds();
+    } catch (e) { log('✘ ' + e.message, 'bad'); }
+  };
+</script>
+</body>
+</html>

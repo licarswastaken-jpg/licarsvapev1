@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>licarsware — GUI preview (vape v4 style)</title>
+<style>
+  :root {
+    --main:#1a191a; --raised:#161516; --hover:#1e1d1e; --hover2:#282728;
+    --text:#c8c8c8; --muted:#9a9a9a; --dim:#8c8c8c;
+    --accent:#38dbe4; --error:#fa3238; --warning:#ec812c; --success:#05be66;
+    --stroke:rgba(85,85,85,.5);
+  }
+  body.light {
+    --main:#ecedf0; --raised:#e4e5e9; --hover:#e0e1e6; --hover2:#d6d8de;
+    --text:#2d2d32; --muted:#6a6a70; --dim:#8c8c92;
+    --accent:#1eb8c2; --stroke:rgba(160,160,166,.5);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; user-select:none; }
+  body {
+    font-family: Arial, 'Segoe UI', sans-serif;
+    background:#141314;
+    background-image: radial-gradient(circle at 35% 25%, #201f20 0%, #141314 65%);
+    min-height:100vh; color:var(--text); overflow:hidden; font-size:14px;
+  }
+  /* ---------- vape-style windows ---------- */
+  .win {
+    position:fixed; width:220px; background:var(--main); border-radius:5px;
+    border:1px solid var(--stroke); box-shadow:0 8px 26px rgba(0,0,0,.55);
+    z-index:10;
+  }
+  #mainwin { left:8px; top:64px; }
+  #combatwin { left:250px; top:64px; display:none; }
+  #renderwin { left:484px; top:64px; display:none; }
+  .head { height:41px; display:flex; align-items:center; cursor:move; }
+  .logo { font-family:'Segoe UI', Arial; font-weight:900; font-size:13px; letter-spacing:-.3px; margin-left:12px; color:var(--text); }
+  .v4 { color:var(--accent); font-size:11px; font-weight:900; margin-left:4px; }
+  .gear { margin-left:auto; width:24px; height:41px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--dim); font-size:13px; }
+  .gear:hover, .gear.open { color:var(--accent); }
+  .gearmenu {
+    position:absolute; right:-6px; top:45px; width:160px; background:var(--main);
+    border:1px solid var(--stroke); border-radius:5px; padding:8px 6px 6px; display:none; z-index:60;
+    box-shadow:0 10px 30px rgba(0,0,0,.5);
+  }
+  .gearmenu.show { display:block; }
+  .gearmenu .gt { font-size:10px; letter-spacing:1px; color:var(--dim); padding:0 6px 4px; font-weight:bold; }
+  .opt { padding:5px 8px; border-radius:4px; font-size:13px; cursor:pointer; color:var(--muted); display:flex; align-items:center; gap:7px; }
+  .opt:hover { background:var(--hover2); color:var(--text); }
+  .opt.sel { background:var(--hover2); color:var(--text); }
+  .dotc { width:7px; height:7px; border-radius:50%; border:1.5px solid var(--dim); flex-shrink:0; }
+  .opt.sel .dotc { background:var(--accent); border-color:var(--accent); }
+  .rows { padding:0 6px 6px; }
+  .row {
+    width:100%; height:30px; display:flex; align-items:center; padding-left:12px;
+    color:var(--muted); font-size:14px; cursor:pointer; border-radius:4px; position:relative;
+  }
+  .row:hover { color:var(--text); background:var(--hover); }
+  /* module row (40px, teal when on) */
+  .mod {
+    width:100%; height:40px; display:flex; align-items:center; padding-left:12px;
+    color:var(--muted); font-size:14px; cursor:pointer; border-radius:4px; position:relative; transition:background .16s, color .16s;
+  }
+  .mod:hover { color:var(--text); background:var(--hover); }
+  .mod.on { background:var(--accent); color:#3c3c3c; }
+  .mod .dots { margin-left:auto; margin-right:10px; display:flex; flex-direction:column; gap:3px; padding:8px; }
+  .mod .dots i { width:3px; height:3px; border-radius:1px; background:var(--dim); }
+  .mod.on .dots i { background:#3c3c3c; }
+  .modopts { display:none; background:var(--raised); border-radius:4px; margin-bottom:4px; padding:2px 0; }
+  .modopts.show { display:block; }
+  .modwrap { margin-bottom:2px; }
+  /* toggle pill */
+  .pill { margin-left:auto; margin-right:12px; width:22px; height:12px; border-radius:6px; background:var(--hover2); position:relative; transition:background .16s; flex-shrink:0; }
+  .pill:hover { background:var(--dim); }
+  .pill.on { background:var(--accent); }
+  .pill i { position:absolute; top:2px; left:2px; width:8px; height:8px; border-radius:50%; background:var(--main); transition:left .16s; }
+  .pill.on i { left:12px; }
+  /* slider */
+  .sliderrow { padding:8px 12px 10px; }
+  .sliderrow .lt { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  .sliderrow .lt b { color:var(--dim); font-weight:normal; font-size:12px; }
+  .track { height:6px; border-radius:3px; background:var(--hover2); position:relative; cursor:pointer; }
+  .fill { height:100%; border-radius:3px; background:var(--accent); width:40%; }
+  .knob { position:absolute; top:50%; transform:translate(-50%,-50%); left:40%; width:10px; height:10px; border-radius:50%; background:#fff; }
+  .divider { height:1px; background:rgba(255,255,255,.07); margin:4px 0; }
+  /* sidebar extras: search, profiles, bind chips, stars */
+  .searchrow { padding:2px 6px 6px; }
+  .searchrow input { width:100%; background:var(--raised); border:1px solid var(--stroke); color:var(--text); border-radius:4px; padding:6px 8px; font-size:12.5px; outline:none; user-select:text; }
+  .searchrow input:focus { border-color:var(--accent); }
+  #searchresults { padding:0 6px; }
+  .profilerow { display:flex; justify-content:space-between; align-items:center; padding:6px 12px; border-top:1px solid var(--stroke); font-size:12px; color:var(--dim); }
+  .profilerow b { color:var(--muted); font-weight:normal; }
+  .mod .bindchip { font-size:9.5px; color:var(--dim); border:1px solid var(--stroke); border-radius:3px; padding:1px 4px; min-width:16px; text-align:center; cursor:pointer; flex-shrink:0; }
+  .mod .bindchip:hover { color:var(--text); border-color:var(--dim); }
+  .mod .bindchip.bound { color:var(--accent); border-color:var(--accent); }
+  .mod .bindchip.listening { color:var(--accent); border-color:var(--accent); animation:blink 0.9s infinite; }
+  .mod .star { font-size:12px; color:var(--dim); cursor:pointer; flex-shrink:0; margin:0 7px 0 8px; }
+  .mod .star:hover { color:var(--text); }
+  .mod .star.fav { color:#f5c542; }
+  .mod.on .bindchip, .mod.on .star { color:#3c3c3c; border-color:rgba(0,0,0,.25); }
+  .mod.on .star.fav { color:#3c3c3c; }
+  @keyframes blink { 50% { opacity:.35; } }
+  .nightfx { position:fixed; bottom:130px; left:50%; font-size:42px; z-index:80; filter:drop-shadow(0 0 14px rgba(56,219,228,.85)); animation:spinny 2.5s linear infinite; }
+  @keyframes spinny { from { transform:translateX(-50%) rotate(0deg); } to { transform:translateX(-50%) rotate(360deg); } }
+  /* ---------- notifications (vape style) ---------- */
+  .toast {
+    position:fixed; right:6px; width:290px; height:75px; background:var(--main);
+    border:1px solid var(--stroke); border-radius:5px; z-index:200;
+    box-shadow:0 8px 26px rgba(0,0,0,.55); padding:12px 10px 0 48px;
+    animation:slidein .4s cubic-bezier(.16,1,.3,1);
+  }
+  @keyframes slidein { from { transform:translateX(110%); } to { transform:translateX(0); } }
+  .toast .tt { font-weight:bold; font-size:14px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  body.light .toast .tt { color:var(--text); text-shadow:none; }
+  .toast .tb { color:var(--muted); font-size:13px; margin-top:6px; line-height:1.3; }
+  .toast .ic { position:absolute; left:12px; top:21px; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; color:#fff; font-size:13px; }
+  .toast .prog { position:absolute; left:3px; bottom:4px; height:1px; background:#fff; width:calc(100% - 13px); animation:deplete linear forwards; }
+  body.light .toast .prog { background:var(--dim); }
+  @keyframes deplete { from { width:calc(100% - 13px); } to { width:0; } }
+  /* target info overlay */
+  .targetinfo {
+    position:fixed; left:50%; transform:translateX(-50%); bottom:150px; width:240px; height:89px;
+    background:rgba(10,9,10,.55); border:1px solid var(--stroke); border-radius:5px; z-index:90;
+    display:none; padding:17px 0 0 19px; backdrop-filter:blur(4px);
+  }
+  .targetinfo.show { display:block; }
+  .targetinfo .ava { position:absolute; left:19px; top:17px; width:26px; height:27px; border-radius:50%; background:var(--main); display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); }
+  .targetinfo .tname { position:absolute; left:54px; top:20px; width:145px; font-size:14px; color:var(--text); text-shadow:1px 1px 0 rgba(0,0,0,.65); }
+  .targetinfo .hbar { position:absolute; left:20px; top:56px; width:200px; height:9px; border-radius:5px; background:var(--main); overflow:hidden; }
+  .targetinfo .hfill { height:100%; border-radius:5px; background:var(--success); transition:width .3s, background .3s; }
+
+  .hint { position:fixed; bottom:12px; left:14px; color:#7a7a7a; font-size:11.5px; z-index:5; }
+  kbd { background:#262526; border:1px solid #3a3a3a; border-radius:4px; padding:1px 6px; font-size:11px; }
+  /* ---------- key card ---------- */
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:100; }
+  .card { width:400px; background:var(--main); border:1px solid var(--stroke); border-radius:8px; padding:24px 26px; box-shadow:0 24px 70px rgba(0,0,0,.7); }
+  .card .logo { font-size:24px; margin:0; }
+  .card .tag { color:var(--dim); font-size:12px; margin-top:3px; }
+  .card .desc { color:var(--dim); font-size:12px; line-height:1.55; margin-top:12px; }
+  .crow { display:flex; gap:8px; margin-top:14px; }
+  .keyinput { flex:1; background:var(--raised); border:1px solid var(--stroke); color:var(--text); padding:10px 12px; border-radius:5px; font-family:Consolas,monospace; font-size:14px; outline:none; }
+  .keyinput:focus { border-color:var(--accent); }
+  .btn { background:var(--accent); color:#103030; border:0; border-radius:5px; padding:10px 18px; font-weight:bold; font-size:13px; cursor:pointer; }
+  .btn:hover { filter:brightness(1.12); }
+  .msg { color:var(--dim); font-size:12px; margin-top:10px; min-height:15px; }
+  .attempts { color:var(--dim); font-size:11px; margin-top:5px; }
+  .links { display:flex; justify-content:space-between; margin-top:12px; font-size:12px; font-weight:bold; }
+  .links a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<!-- ============ key system (on top until verified) ============ -->
+<div class="overlay" id="overlay">
+  <div class="card">
+    <div class="logo logo">licarsware</div>
+    <div class="tag">private build • licarsware • hwid verified</div>
+    <div class="desc">Enter your key to continue. We don't grab your IP or store anything personal — the one-network lock exists only to stop key sharing, so you get the best cheating experience without getting banned. Still, we recommend playing on a new account, just in case.</div>
+    <div class="crow">
+      <input class="keyinput" id="key" placeholder="XXXX-XXXX-XXXX-XXXX" spellcheck="false">
+      <button class="btn" id="submit">SUBMIT</button>
+    </div>
+    <div class="msg" id="msg"> </div>
+    <div class="attempts" id="attempts">5 attempts remaining</div>
+    <div class="links"><a href="#">discord.gg/licarsware</a><a href="#">Get a key →</a></div>
+    <div style="margin-top:12px;color:var(--dim);font-size:10.5px;line-height:1.6;border-top:1px solid var(--stroke);padding-top:8px;">
+      demo keys — <b style="color:var(--muted)">LICARS-PERM-KEY1</b> lifetime • <b style="color:var(--muted)">LICARS-DAY-KEY1</b> 1 day • <b style="color:var(--muted)">LICARS-WEEK-KEY1</b> 1 week • <b style="color:var(--muted)">EXPIRED</b> expired • <b style="color:var(--muted)">BLACKLIST</b> banned
+    </div>
+  </div>
+</div>
+
+<!-- ============ main window / sidebar ============ -->
+<div class="win" id="mainwin">
+  <div class="head" onmousedown="dragStart(event,'mainwin')">
+    <div class="logo">licarsware<span class="v4">v4</span></div>
+    <div class="gear" id="gear" onclick="toggleGear(event)">⚙</div>
+  </div>
+  <div class="gearmenu" id="gearmenu">
+    <div class="gt">THEME</div>
+    <div class="opt sel" data-t="dark" onclick="setTheme('dark')"><span class="dotc"></span>Dark&nbsp;&nbsp;•&nbsp;&nbsp;default</div>
+    <div class="opt" data-t="light" onclick="setTheme('light')"><span class="dotc"></span>Light</div>
+  </div>
+  <div class="rows" style="padding-top:2px;">
+    <div class="searchrow"><input id="search" placeholder="Search modules..." spellcheck="false"></div>
+    <div id="searchresults"></div>
+    <div class="row" onclick="toggleWin('favwin', this)"><span style="color:var(--accent);margin-right:6px;">◆</span>Favorites</div>
+    <div class="row" onclick="toggleWin('combatwin', this)">Combat</div>
+    <div class="row" onclick="toggleWin('blatantwin', this)">Blatant</div>
+    <div class="row" onclick="toggleWin('renderwin', this)">Render</div>
+    <div class="row" onclick="toggleWin('utilitywin', this)">Utility</div>
+    <div class="row" onclick="toggleWin('worldwin', this)">World</div>
+    <div class="row" onclick="toggleWin('scriptswin', this)">Scripts</div>
+    <div class="row" onclick="toggleGear(event)">Settings</div>
+    <div class="row" style="color:var(--error);" onclick="selfDestruct()">Self destruct</div>
+  </div>
+  <div class="profilerow"><span>Profiles</span><b>Default</b></div>
+</div>
+
+<!-- ============ combat category ============ -->
+<div class="win" id="combatwin">
+  <div class="head" onmousedown="dragStart(event,'combatwin')">
+    <div style="width:9px;height:9px;border-radius:2px;background:var(--accent);margin-left:12px;"></div>
+    <div style="margin-left:12px;font-size:13px;color:var(--text);">Combat</div>
+    <div class="gear" onclick="collapse('combatwin')">▲</div>
+  </div>
+  <div class="rows" style="padding-bottom:8px;">
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Auto clicker')" data-mod="Auto clicker"><span>Auto clicker</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>CPS</span><b>8</b></div>
+          <div class="track" data-min="1" data-max="20" onmousedown="slide(event,this)"><div class="fill" style="width:36.8%"></div><div class="knob" style="left:36.8%"></div></div></div>
+        <div class="sliderrow"><div class="lt"><span>Range</span><b>12 studs</b></div>
+          <div class="track" data-min="5" data-max="25" data-suffix="studs" onmousedown="slide(event,this)"><div class="fill" style="width:35%"></div><div class="knob" style="left:35%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Velocity')" data-mod="Velocity"><span>Velocity</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Horizontal</span><b>0%</b></div>
+          <div class="track" data-min="0" data-max="100" data-suffix="%" onmousedown="slide(event,this)"><div class="fill" style="width:0%"></div><div class="knob" style="left:0%"></div></div></div>
+        <div class="sliderrow"><div class="lt"><span>Vertical</span><b>0%</b></div>
+          <div class="track" data-min="0" data-max="100" data-suffix="%" onmousedown="slide(event,this)"><div class="fill" style="width:0%"></div><div class="knob" style="left:0%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Aim assist')" data-mod="Aim assist"><span>Aim assist</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>FOV</span><b>60</b></div>
+          <div class="track" data-min="10" data-max="180" onmousedown="slide(event,this)"><div class="fill" style="width:29.4%"></div><div class="knob" style="left:29.4%"></div></div></div>
+        <div class="sliderrow"><div class="lt"><span>Smoothness</span><b>0.35</b></div>
+          <div class="track" data-min="0.05" data-max="1" onmousedown="slide(event,this)"><div class="fill" style="width:31.6%"></div><div class="knob" style="left:31.6%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Trigger bot')" data-mod="Trigger bot"><span>Trigger bot</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Delay</span><b>0.15s</b></div>
+          <div class="track" data-min="0" data-max="1" data-suffix="s" onmousedown="slide(event,this)"><div class="fill" style="width:15%"></div><div class="knob" style="left:15%"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ blatant category ============ -->
+<div class="win" id="blatantwin" style="display:none;left:250px;top:64px;">
+  <div class="head" onmousedown="dragStart(event,'blatantwin')">
+    <div style="width:9px;height:9px;border-radius:2px;background:var(--accent);margin-left:12px;"></div>
+    <div style="margin-left:12px;font-size:13px;color:var(--text);">Blatant</div>
+    <div class="gear" onclick="collapse('blatantwin')">▲</div>
+  </div>
+  <div class="rows" style="padding-bottom:8px;">
+    <div class="row" style="color:var(--accent);cursor:pointer;" onclick="closet()">Closet cheat (recommended)</div>
+    <div style="font-size:11.5px;color:var(--dim);padding:0 12px 6px;line-height:1.45;">Bedwars attack reach is 12 studs. Closet cheating = keeping your range at or under what a legit player could hit — 14.4 is the sweet spot, 18 is the hard cap, 25 is the absolute max. Ranges below 10 are not allowed.</div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Kill aura')" data-mod="Kill aura"><span>Kill aura</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span>
+      </div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Target range</span><b>12 studs</b></div>
+          <div class="track" data-min="10" data-max="25" data-suffix="studs" data-closet="1" onmousedown="slide(event,this)"><div class="fill" style="width:13.3%"></div><div class="knob" style="left:13.3%"></div></div></div>
+        <div class="sliderrow"><div class="lt"><span>Attack range</span><b>12 studs</b></div>
+          <div class="track" data-min="10" data-max="25" data-suffix="studs" data-closet="1" onmousedown="slide(event,this)"><div class="fill" style="width:13.3%"></div><div class="knob" style="left:13.3%"></div></div></div>
+        <div class="row" style="font-size:13.5px;">Target mode<span class="pill" style="width:auto;height:auto;background:none;color:var(--dim);font-size:12px;">Closest ▾</span></div>
+        <div class="row" style="font-size:13.5px;" onclick="pill(this)">Team check<span class="pill on"><i></i></span></div>
+        <div class="row" style="font-size:13.5px;" onclick="pill(this)">Auto equip<span class="pill on"><i></i></span></div>
+        <div class="sliderrow"><div class="lt"><span>Swing delay</span><b>0.35s</b></div>
+          <div class="track" data-min="0.1" data-max="1" data-suffix="s" onmousedown="slide(event,this)"><div class="fill" style="width:27.8%"></div><div class="knob" style="left:27.8%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Speed')" data-mod="Speed"><span>Speed</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Speed</span><b>16</b></div>
+          <div class="track" data-min="16" data-max="22" onmousedown="slide(event,this)"><div class="fill" style="width:0%"></div><div class="knob" style="left:0%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'High jump')" data-mod="High jump"><span>High jump</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Power</span><b>50</b></div>
+          <div class="track" data-min="30" data-max="120" onmousedown="slide(event,this)"><div class="fill" style="width:22.2%"></div><div class="knob" style="left:22.2%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Infinite jump')" data-mod="Infinite jump"><span>Infinite jump</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Noclip')" data-mod="Noclip"><span>Noclip</span></div></div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Fly')" data-mod="Fly"><span>Fly</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Speed</span><b>60</b></div>
+          <div class="track" data-min="20" data-max="200" onmousedown="slide(event,this)"><div class="fill" style="width:22.2%"></div><div class="knob" style="left:22.2%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Long jump')" data-mod="Long jump"><span>Long jump</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Power</span><b>45</b></div>
+          <div class="track" data-min="20" data-max="100" onmousedown="slide(event,this)"><div class="fill" style="width:31.2%"></div><div class="knob" style="left:31.2%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Spider')" data-mod="Spider"><span>Spider</span></div></div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Sprint')" data-mod="Sprint"><span>Sprint</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Multiplier</span><b>1.6x</b></div>
+          <div class="track" data-min="1.1" data-max="3" data-suffix="x" onmousedown="slide(event,this)"><div class="fill" style="width:27.8%"></div><div class="knob" style="left:27.8%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Safe walk')" data-mod="Safe walk"><span>Safe walk</span></div></div>
+  </div>
+</div>
+
+<!-- ============ utility category ============ -->
+<div class="win" id="utilitywin" style="display:none;left:718px;top:64px;">
+  <div class="head" onmousedown="dragStart(event,'utilitywin')">
+    <div style="width:9px;height:9px;border-radius:2px;background:var(--accent);margin-left:12px;"></div>
+    <div style="margin-left:12px;font-size:13px;color:var(--text);">Utility</div>
+    <div class="gear" onclick="collapse('utilitywin')">▲</div>
+  </div>
+  <div class="rows" style="padding-bottom:8px;">
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Anti AFK')" data-mod="Anti AFK"><span>Anti AFK</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Chat spy')" data-mod="Chat spy"><span>Chat spy</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Click TP')" data-mod="Click TP"><span>Click TP</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Rejoin')" data-mod="Rejoin"><span>Rejoin</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Server hop')" data-mod="Server hop"><span>Server hop</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Panic')" data-mod="Panic"><span>Panic</span></div></div>
+  </div>
+</div>
+
+<!-- ============ world category ============ -->
+<div class="win" id="worldwin" style="display:none;left:250px;top:64px;">
+  <div class="head" onmousedown="dragStart(event,'worldwin')">
+    <div style="width:9px;height:9px;border-radius:2px;background:var(--accent);margin-left:12px;"></div>
+    <div style="margin-left:12px;font-size:13px;color:var(--text);">World</div>
+    <div class="gear" onclick="collapse('worldwin')">▲</div>
+  </div>
+  <div class="rows" style="padding-bottom:8px;">
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Gravity')" data-mod="Gravity"><span>Gravity</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Strength</span><b>60</b></div>
+          <div class="track" data-min="0" data-max="196" onmousedown="slide(event,this)"><div class="fill" style="width:30.6%"></div><div class="knob" style="left:30.6%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Clock time')" data-mod="Clock time"><span>Clock time</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Hour</span><b>14</b></div>
+          <div class="track" data-min="0" data-max="24" onmousedown="slide(event,this)"><div class="fill" style="width:58.3%"></div><div class="knob" style="left:58.3%"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ scripts category ============ -->
+<div class="win" id="scriptswin" style="display:none;left:484px;top:64px;">
+  <div class="head" onmousedown="dragStart(event,'scriptswin')">
+    <div style="width:9px;height:9px;border-radius:2px;background:var(--accent);margin-left:12px;"></div>
+    <div style="margin-left:12px;font-size:13px;color:var(--text);">Scripts</div>
+    <div class="gear" onclick="collapse('scriptswin')">▲</div>
+  </div>
+  <div class="rows" style="padding-bottom:8px;">
+    <div style="font-size:11.5px;color:var(--dim);padding:2px 12px 6px;line-height:1.45;">Scripts are one-shot and keybindable — click the key chip (—) next to a script, press any key, and it fires from anywhere in-game.</div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Nightmare emote')" data-mod="Nightmare emote"><span>🌙 Nightmare emote</span></div></div>
+  </div>
+</div>
+
+<!-- ============ favorites category (built from starred modules) ============ -->
+<div class="win" id="favwin" style="display:none;left:484px;top:64px;">
+  <div class="head" onmousedown="dragStart(event,'favwin')">
+    <div style="width:9px;height:9px;border-radius:2px;background:var(--accent);margin-left:12px;"></div>
+    <div style="margin-left:12px;font-size:13px;color:var(--text);">Favorites</div>
+    <div class="gear" onclick="collapse('favwin')">▲</div>
+  </div>
+  <div class="rows" id="favrows" style="padding-bottom:8px;"></div>
+</div>
+
+<!-- ============ render category ============ -->
+<div class="win" id="renderwin">
+  <div class="head" onmousedown="dragStart(event,'renderwin')">
+    <div style="width:9px;height:9px;border-radius:2px;background:var(--accent);margin-left:12px;"></div>
+    <div style="margin-left:12px;font-size:13px;color:var(--text);">Render</div>
+    <div class="gear" onclick="collapse('renderwin')">▲</div>
+  </div>
+  <div class="rows" style="padding-bottom:8px;">
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'ESP')" data-mod="ESP"><span>ESP</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="row" style="font-size:13.5px;" onclick="pill(this)">Boxes<span class="pill on"><i></i></span></div>
+        <div class="row" style="font-size:13.5px;" onclick="pill(this)">Names<span class="pill on"><i></i></span></div>
+        <div class="row" style="font-size:13.5px;" onclick="pill(this)">Health bar<span class="pill"><i></i></span></div>
+        <div class="row" style="font-size:13.5px;">Box color<span class="pill" style="width:auto;height:auto;background:none;color:var(--dim);font-size:12px;">Team ▾</span></div>
+      </div>
+    </div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Fullbright')" data-mod="Fullbright"><span>Fullbright</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'No fog')" data-mod="No fog"><span>No fog</span></div></div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'Chams')" data-mod="Chams"><span>Chams</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="row" style="font-size:13.5px;" onclick="pill(this)">Team color<span class="pill on"><i></i></span></div>
+        <div class="row" style="font-size:13.5px;" onclick="pill(this)">Through walls<span class="pill on"><i></i></span></div>
+      </div>
+    </div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Name tags')" data-mod="Name tags"><span>Name tags</span></div></div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'FOV')" data-mod="FOV"><span>FOV</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Value</span><b>90</b></div>
+          <div class="track" data-min="60" data-max="120" onmousedown="slide(event,this)"><div class="fill" style="width:50%"></div><div class="knob" style="left:50%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap">
+      <div class="mod" onclick="toggleMod(this,'FPS uncap')" data-mod="FPS uncap"><span>FPS uncap</span>
+        <span class="dots" onclick="openOpts(event,this)"><i></i><i></i><i></i></span></div>
+      <div class="modopts">
+        <div class="sliderrow"><div class="lt"><span>Cap</span><b>240</b></div>
+          <div class="track" data-min="60" data-max="999" onmousedown="slide(event,this)"><div class="fill" style="width:20%"></div><div class="knob" style="left:20%"></div></div></div>
+      </div>
+    </div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Invisible')" data-mod="Invisible"><span>Invisible</span></div></div>
+    <div class="modwrap"><div class="mod" onclick="toggleMod(this,'Headless')" data-mod="Headless"><span>Headless</span></div></div>
+  </div>
+</div>
+
+<!-- ============ target info overlay (shows with Kill aura) ============ -->
+<div class="targetinfo" id="targetinfo">
+  <div class="ava">?</div>
+  <div class="tname" id="tiname">Target name</div>
+  <div class="hbar"><div class="hfill" id="tifill" style="width:100%;"></div></div>
+</div>
+
+<!-- ============ injected toast (vape style) ============ -->
+<div class="toast" id="toast" style="display:none;">
+  <div class="ic" style="background:var(--success);">✓</div>
+  <div class="tt">Injected</div>
+  <div class="tb">licarsware loaded successfully • Synapse Z</div>
+  <div class="prog" style="animation-duration:5s;"></div>
+</div>  <div class="hint">Preview — <kbd>Right Shift</kbd> toggles menu • bind chip (—) = press any key • ☆ = favorite • search filters modules • click dots or right-click for options</div>
+
+<script>
+  // ---- tabs/windows ----
+  function toggleWin(id, row) {
+    const w = document.getElementById(id);
+    if (!w) return;
+    const showing = w.style.display === 'block';
+    w.style.display = showing ? 'none' : 'block';
+    row.style.background = showing ? '' : 'var(--hover2)';
+    row.style.color = showing ? '' : 'var(--text)';
+  }
+  function collapse(id) {
+    const w = document.getElementById(id);
+    const rows = w.querySelector('.rows');
+    rows.style.display = rows.style.display === 'none' ? 'block' : 'none';
+  }
+  function toggleMod(el, name) {
+    if (name === 'Panic') { el.classList.remove('on'); panicAll(); return; }
+    el.classList.toggle('on');
+    const on = el.classList.contains('on');
+    MOD[name] = MOD[name] || { on:false };
+    MOD[name].on = on;
+    document.querySelectorAll(`.mod[data-mod="${name}"]`).forEach(m => m.classList.toggle('on', on));
+    toast(name, on ? "Enabled" : "Disabled", on ? 'success' : 'alert', 1500);
+    if (name === 'Kill aura') killAuraDemo(on);
+    if (name === 'Nightmare emote') nightmareDemo(on);
+  }
+
+  // ---- module state registry (one source of truth across all windows) ----
+  const MOD = {};
+  const BINDS = JSON.parse(localStorage.getItem('lw_binds') || '{}');
+  const FAVS = new Set(JSON.parse(localStorage.getItem('lw_favs') || '[]'));
+  function savePrefs() {
+    localStorage.setItem('lw_binds', JSON.stringify(BINDS));
+    localStorage.setItem('lw_favs', JSON.stringify([...FAVS]));
+  }
+  const modRow = name => document.querySelector(`.mod[data-mod="${CSS.escape(name)}"]`);
+  const wrap = el => { const w = document.createElement('div'); w.className = 'modwrap'; w.appendChild(el); return w; };
+
+  function injectChips() {
+    document.querySelectorAll('.mod[data-mod]').forEach(m => {
+      const name = m.dataset.mod;
+      MOD[name] = MOD[name] || { on: m.classList.contains('on') };
+      const chip = document.createElement('span');
+      chip.className = 'bindchip' + (BINDS[name] ? ' bound' : '');
+      chip.textContent = BINDS[name] || '—';
+      chip.title = 'Click, then press any key to bind (Esc clears)';
+      const dots = m.querySelector('.dots');
+      const star = document.createElement('span');
+      star.className = 'star' + (FAVS.has(name) ? ' fav' : '');
+      star.textContent = FAVS.has(name) ? '★' : '☆';
+      star.title = 'Favorite';
+      if (dots) { m.insertBefore(chip, dots); m.insertBefore(star, dots); }
+      else { m.appendChild(chip); m.appendChild(star); }
+    });
+  }
+
+  // star / chip clicks handled in capture phase so clones + rows don't double-fire
+  document.addEventListener('click', e => {
+    const star = e.target.closest('.star');
+    if (star) { e.stopPropagation(); toggleFav(star.closest('.mod').dataset.mod); return; }
+    const chip = e.target.closest('.bindchip');
+    if (chip) { e.stopPropagation(); startCapture(chip.closest('.mod').dataset.mod, chip); }
+  }, true);
+
+  // ---- keybind capture: click chip, press any key ----
+  let capturing = null;
+  function startCapture(name, chip) {
+    if (capturing) { capturing.chip.classList.remove('listening'); capturing.chip.textContent = BINDS[capturing.name] || '—'; }
+    capturing = { name, chip };
+    chip.classList.add('listening');
+    chip.textContent = '...';
+  }
+  window.addEventListener('keydown', e => {
+    if (!capturing) return;
+    e.preventDefault(); e.stopPropagation();
+    const { name, chip } = capturing; capturing = null;
+    chip.classList.remove('listening');
+    if (e.code === 'ShiftRight' || e.code === 'Escape') {
+      delete BINDS[name]; chip.textContent = '—'; chip.classList.remove('bound');
+      toast('Keybind', e.code === 'ShiftRight' ? 'RightShift is reserved for the menu — bind cleared' : `${name} bind cleared`, 'info', 2500);
+    } else {
+      BINDS[name] = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      chip.textContent = BINDS[name]; chip.classList.add('bound');
+      toast('Keybind', `${name} → ${BINDS[name]}`, 'info', 2500);
+    }
+    savePrefs();
+  }, true);
+
+  // ---- favorites (starred modules render into the Favorites window) ----
+  function toggleFav(name) {
+    if (FAVS.has(name)) FAVS.delete(name); else FAVS.add(name);
+    savePrefs();
+    document.querySelectorAll(`.mod[data-mod="${CSS.escape(name)}"] .star`).forEach(s => {
+      s.classList.toggle('fav', FAVS.has(name));
+      s.textContent = FAVS.has(name) ? '★' : '☆';
+    });
+    renderFavs();
+  }
+  function renderFavs() {
+    const box = document.getElementById('favrows');
+    box.innerHTML = '';
+    const names = [...FAVS].sort();
+    if (!names.length) {
+      box.innerHTML = '<div style="font-size:11.5px;color:var(--dim);padding:4px 12px 8px;">No favorites yet — hit the ☆ next to any module (try Phase… er, Kill aura).</div>';
+      return;
+    }
+    names.forEach(n => {
+      const src = modRow(n);
+      if (!src) return;
+      const rep = src.cloneNode(true);
+      rep.classList.toggle('on', src.classList.contains('on'));
+      box.appendChild(wrap(rep));
+    });
+  }
+
+  // ---- search: type to filter every module by name ----
+  const searchEl = document.getElementById('search'), resultsEl = document.getElementById('searchresults');
+  const catRows = () => [...document.querySelectorAll('#mainwin .row')].filter(r => (r.getAttribute('onclick') || '').includes('toggleWin'));
+  searchEl.addEventListener('input', () => {
+    const q = searchEl.value.trim().toLowerCase();
+    resultsEl.innerHTML = '';
+    catRows().forEach(r => r.style.display = q ? 'none' : '');
+    if (!q) return;
+    Object.keys(MOD).sort().filter(n => n.toLowerCase().includes(q)).forEach(n => {
+      const src = modRow(n);
+      if (!src) return;
+      const rep = src.cloneNode(true);
+      rep.classList.toggle('on', src.classList.contains('on'));
+      resultsEl.appendChild(wrap(rep));
+    });
+  });
+
+  // ---- panic: everything off ----
+  function panicAll() {
+    Object.keys(MOD).forEach(n => MOD[n].on = false);
+    document.querySelectorAll('.mod.on').forEach(m => m.classList.remove('on'));
+    clearInterval(tiTimer);
+    document.getElementById('targetinfo').classList.remove('show');
+    const fx = document.querySelector('.nightfx'); if (fx) fx.remove();
+    toast('Panic', 'Everything disabled', 'warning', 3000);
+  }
+
+  // ---- nightmare emote demo: spinning ring that auto-cancels like the real script ----
+  function nightmareDemo(on) {
+    let fx = document.querySelector('.nightfx');
+    if (on && !fx) {
+      fx = document.createElement('div');
+      fx.className = 'nightfx';
+      fx.textContent = '🌀';
+      document.body.appendChild(fx);
+      toast('Nightmare emote', 'Summoned • bind it to any key with the chip', 'success', 3500);
+      setTimeout(() => {
+        if (fx.parentNode) {
+          fx.remove();
+          const row = modRow('Nightmare emote');
+          if (row) { row.classList.remove('on'); MOD['Nightmare emote'].on = false; }
+        }
+      }, 6000);
+    } else if (fx) fx.remove();
+  }
+  // demo: target info card follows the aura with a fake draining health bar
+  let tiTimer;
+  function killAuraDemo(on) {
+    const card = document.getElementById('targetinfo');
+    clearInterval(tiTimer);
+    if (!on) { card.classList.remove('show'); return; }
+    let hp = 1;
+    document.getElementById('tiname').textContent = 'ZombiePlayer_42';
+    document.getElementById('tifill').style.width = '100%';
+    card.classList.add('show');
+    tiTimer = setInterval(() => {
+      hp = Math.max(0, hp - 0.07);
+      const fill = document.getElementById('tifill');
+      fill.style.width = (hp * 100) + '%';
+      fill.style.background = `hsl(${Math.max(hp / 2.5, 0) * 140}, 89%, 55%)`;
+      if (hp <= 0) { hp = 1; document.getElementById('tiname').textContent = 'xX_Sweat_99 Xx'; }
+    }, 600);
+  }
+  function openOpts(e, dots) {
+    e.stopPropagation();
+    const opts = dots.closest('.modwrap').querySelector('.modopts');
+    if (opts) opts.classList.toggle('show');
+  }
+  function pill(el) {
+    const p = el.querySelector('.pill');
+    if (p && p.style.width === '') p.classList.toggle('on');
+  }
+  function slide(e, track) {
+    const min = parseFloat(track.dataset.min ?? '0'), max = parseFloat(track.dataset.max ?? '100');
+    const suffix = track.dataset.suffix ? ' ' + track.dataset.suffix : '';
+    const lab = track.closest('.sliderrow').querySelector('.lt b');
+    const move = ev => {
+      const r = track.getBoundingClientRect();
+      const pct = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+      let v = Math.round((min + pct * (max - min)) * 10) / 10; // 0.1 steps
+      if (v > max) v = max;                                    // 30 -> snaps to 25
+      if (v < min) v = min;                                    // hard floor
+      const p = ((v - min) / (max - min)) * 100;
+      track.querySelector('.fill').style.width = p + '%';
+      track.querySelector('.knob').style.left = p + '%';
+      lab.textContent = (Math.round(v * 10) / 10) + suffix;
+    };
+    move(e);
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  }
+
+  // ---- closet cheat preset: 14.4 studs, hard-capped at 18 ----
+  function closet() {
+    document.querySelectorAll('#blatantwin .track[data-closet]').forEach(t => {
+      t.dataset.min = '10'; t.dataset.max = '18';
+      const p = (14.4 - 10) / (18 - 10) * 100;
+      t.querySelector('.fill').style.width = p + '%';
+      t.querySelector('.knob').style.left = p + '%';
+      t.closest('.sliderrow').querySelector('.lt b').textContent = '14.4 studs';
+    });
+    toast('Closet cheat', 'Preset applied • 14.4 studs • capped at 18 (Bedwars reach = 12)', 'info', 5000);
+  }
+
+  // ---- drag by header ----
+  function dragStart(e, id) {
+    if (e.target.closest('.gear') || e.target.closest('.rows')) return;
+    const w = document.getElementById(id);
+    const sx = e.clientX, sy = e.clientY;
+    const r = w.getBoundingClientRect();
+    const move = ev => { w.style.left = (r.left + ev.clientX - sx) + 'px'; w.style.top = (r.top + ev.clientY - sy) + 'px'; };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  }
+
+  // ---- gear / theme ----
+  const gear = document.getElementById('gear'), gm = document.getElementById('gearmenu');
+  function toggleGear(e) { e && e.stopPropagation(); gm.classList.toggle('show'); gear.classList.toggle('open'); }
+  document.addEventListener('click', e => { if (!gm.contains(e.target)) { gm.classList.remove('show'); gear.classList.remove('open'); } });
+  function setTheme(t) {
+    document.body.classList.toggle('light', t === 'light');
+    document.querySelectorAll('.opt').forEach(o => o.classList.toggle('sel', o.dataset.t === t));
+    gm.classList.remove('show'); gear.classList.remove('open');
+  }
+
+  // ---- vape-style toasts ----
+  let toasts = 0;
+  function toast(title, body, kind, dur) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    const color = kind === 'alert' ? 'var(--error)' : kind === 'warning' ? 'var(--warning)' : kind === 'success' ? 'var(--success)' : 'var(--accent)';
+    const glyph = kind === 'success' ? '✓' : kind === 'info' ? 'i' : '!';
+    t.innerHTML = `<div class="ic" style="background:${color};">${glyph}</div><div class="tt" ${kind==='alert' ? `style="color:var(--error);"` : ''}>${title}</div><div class="tb">${body}</div><div class="prog" style="animation-duration:${(dur||4000)/1000}s;"></div>`;
+    t.style.bottom = (29 + 78 * toasts) + 'px';
+    toasts++;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => { t.remove(); toasts--; }, 320); }, dur || 4000);
+  }
+
+  // ---- key flow (simulated) ----
+  const overlay = document.getElementById('overlay');
+  const key = document.getElementById('key'), submit = document.getElementById('submit');
+  const msg = document.getElementById('msg'), attempts = document.getElementById('attempts');
+  let tries = 5;
+  // demo keys: duration licenses (1d / 7d / lifetime) + failure states
+  const DEMO_KEYS = {
+    'LICARS-PERM-KEY1': { duration: 'lifetime', expiresIn: null },
+    'LICARS-TEST-KEY1': { duration: 'lifetime', expiresIn: null },
+    'LICARS-DAY-KEY1':  { duration: '1d',       expiresIn: 86100 },  // 23h 55m
+    'LICARS-WEEK-KEY1': { duration: '7d',       expiresIn: 602600 }, // 6d 23h
+  };
+  function fmtDur(s) {
+    if (s == null) return 'lifetime';
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+  }
+  function setMsg(text, kind) {
+    msg.textContent = text;
+    msg.style.color = kind === 'error' ? 'var(--error)' : kind === 'success' ? 'var(--success)' : 'var(--dim)';
+  }
+  function tryKey() {
+    const v = key.value.trim().toUpperCase();
+    if (!v) return setMsg('Enter a key.', 'error');
+    setMsg('Contacting auth server...', 'info'); submit.textContent = '...'; submit.disabled = true;
+    setTimeout(() => {
+      submit.textContent = 'SUBMIT'; submit.disabled = false;
+      const hit = DEMO_KEYS[v];
+      if (hit) {
+        setMsg('Key verified! Bound to this IP.', 'success');
+        attempts.textContent = hit.expiresIn != null
+          ? hit.duration + ' license • ' + fmtDur(hit.expiresIn) + ' remaining'
+          : 'lifetime license';
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          toast('Injected', 'licarsware loaded successfully • Synapse Z', 'success', 5000);
+          if (hit.expiresIn != null) setTimeout(() => toast('License', hit.duration + ' • ' + fmtDur(hit.expiresIn) + ' remaining', 'info', 6000), 5600);
+        }, 500);
+      } else if (v === 'EXPIRED') {
+        setMsg('License expired. Buy a new key.', 'error');
+        attempts.textContent = 'license expired';
+      } else if (v === 'BLACKLIST') {
+        setMsg('This device is blacklisted. No further attempts allowed.', 'error');
+        attempts.textContent = '0 attempts remaining'; key.disabled = true; submit.textContent = 'LOCKED'; submit.disabled = true;
+      } else {
+        tries--; setMsg('Invalid key. ' + tries + ' attempts left.', 'error');
+        attempts.textContent = tries + ' attempts remaining';
+        if (tries <= 0) { setMsg('Too many attempts. Lockout engaged.', 'error'); submit.textContent = 'WAIT'; submit.disabled = true; }
+      }
+    }, 450);
+  }
+  submit.onclick = tryKey;
+  key.addEventListener('keydown', e => { if (e.key === 'Enter') tryKey(); });
+
+  // ---- boot the sidebar extras ----
+  injectChips(); renderFavs();
+
+  // ---- self destruct (preview parity with the real script) ----
+  function selfDestruct() {
+    document.querySelectorAll('.win').forEach(w => w.remove());
+    document.querySelectorAll('.toast').forEach(t => t.remove());
+  }
+
+  // ---- keybinds fire from anywhere + RightShift toggles the whole menu ----
+  document.addEventListener('keydown', e => {
+    if (capturing) return;
+    if (e.code === 'ShiftRight') {
+      document.querySelectorAll('.win').forEach(w => w.style.visibility = w.style.visibility === 'hidden' ? 'visible' : 'hidden');
+      return;
+    }
+    if (e.target.tagName === 'INPUT') return;
+    const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    for (const [name, k] of Object.entries(BINDS)) {
+      if (k === key) {
+        const row = modRow(name);
+        if (row) toggleMod(row, name);
+      }
+    }
+  });
+</script>
+</body>
+</html>
